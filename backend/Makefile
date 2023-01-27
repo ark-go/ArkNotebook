@@ -10,7 +10,7 @@ server:
 	@echo $$($(version))
 	$(info +Компиляция Linux)
 	go build -ldflags "-s -w -X 'main.versionProg=$$($(version))'" -o ./bin/main/$(PROJECTNAME) main/main.go
-	./bin/main/$(PROJECTNAME)
+	sudo ./bin/main/$(PROJECTNAME)
 
 serverwin:
 	$(info +Компиляция windows)
