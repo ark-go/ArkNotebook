@@ -23,8 +23,9 @@ func FFF(c *fiber.Ctx) bool {
 			log.Println("err:", err.Error())
 		}
 		log.Println("cert:", ff)
+	} else {
+		log.Println(">>", c.OriginalURL(), "Без сертификата")
 	}
-	log.Println(">>", c.OriginalURL(), "Без сертификата")
 	return false
 }
 func (sc *SrvController) InitRoutes() {

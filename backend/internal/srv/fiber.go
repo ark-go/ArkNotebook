@@ -86,7 +86,18 @@ func InitServer() {
 		if err != nil {
 			log.Fatal("Error opening cert file", "-- -", ", error ", err)
 		}
+		//
 		caCertPool.AppendCertsFromPEM(caCert)
+
+		caRevoc, err := ioutil.ReadFile("/usr/certs/out/certTestCA.crl")
+		if err != nil {
+			log.Fatal("Error opening caRevoc file", "-- -", ", error ", err)
+		}
+		RevocationList, err := x509.ParseRevocationList(caRevoc)
+		if err != nil {
+			log.Fatal("Error opening RevocationList file", err)
+		}
+
 		_ = cert
 		ln, _ := net.Listen("tcp", os.Getenv("SERVER_ADDR")+":"+os.Getenv("SERVER_PORT"))
 		//--
@@ -104,9 +115,42 @@ func InitServer() {
 				}
 				// helloInfo.ServerName  - что запрашивал клиент адрес какой ? ip - не показывает
 				log.Println("vv:", opts.DNSName, ">", helloInfo.ServerName, ">", helloInfo.Conn.RemoteAddr().String())
+
+				//-- тоже блок
+				// for _, cert := range cs.PeerCertificates[1:] {
+				// 	opts.Intermediates.AddCert(cert)
+				// }
+				// _, err := cs.PeerCertificates[0].Verify(opts)
+				//--
+
 				_, err := verifiedChains[0][0].Verify(opts)
+
 				return err
 			}
+		}
+		VerifyConnection := func(cs tls.ConnectionState) error {
+			opts := x509.VerifyOptions{
+				Roots: caCertPool,
+				//CurrentTime: time.Now(),
+				DNSName: "Ivanov Arkadii", // cs.ServerName, // должно совпадать с "кому выдано" или Domain в сертификате
+				//DNSName:       cs.ServerName,
+				Intermediates: x509.NewCertPool(),
+				// Цепочка принимается, если она допускает любое из перечисленных значений
+				KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageCodeSigning},
+			}
+			for _, cert := range cs.PeerCertificates[1:] {
+				// цпочка сертификатов к корню
+				opts.Intermediates.AddCert(cert)
+				//cert.SerialNumber
+				err := RevocationList.CheckSignatureFrom(cert)
+				if err != nil {
+					log.Println("Revoce test:", err.Error())
+				}
+			}
+			log.Println("veri:", cs.ServerName)
+			// во всех сертификатах в цепочке должны быть одинаковые требования
+			_, err := cs.PeerCertificates[0].Verify(opts)
+			return err
 		}
 		//--
 		var tlsConf *tls.Config
@@ -128,6 +172,7 @@ func InitServer() {
 					ClientAuth:            tls.RequireAndVerifyClientCert,
 					ClientCAs:             caCertPool,
 					VerifyPeerCertificate: getClientValidator(hi),
+					VerifyConnection:      VerifyConnection, // ? зачем это
 				}
 				return serverConf, nil
 			},
